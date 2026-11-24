@@ -5,6 +5,7 @@ sqlacodegen sqlite:///src/db/db.db --generator sqlmodels --outfile src/db/models
 ```
 """
 
+import os
 import sqlite3
 from functools import wraps
 from typing import Callable, List, Optional, TypeVar
@@ -499,12 +500,29 @@ def fetch_question_data(question_ids: list[int]) -> dict[int, dict]:
     return question_data
 
 
+BENCHMARK_WRITE_OPT_IN_ENV = "COBBIE_ALLOW_BENCHMARK_WRITES"
+
+
+def benchmark_writes_enabled() -> bool:
+    """Whether edits to ifc_bench are allowed for this process.
+
+    Read on every call so the opt-in cannot be cached by a long-running app.
+    """
+    return os.environ.get(BENCHMARK_WRITE_OPT_IN_ENV) == "1"
+
+
 def update_ifc_bench_rows(rows: list[dict]) -> int:
     """Update question, ground_truth, and category in ifc_bench for each row.
 
     Each dict must have keys: question_id, question, ground_truth, category.
     Returns count of updated rows.
+
+    Raises PermissionError unless COBBIE_ALLOW_BENCHMARK_WRITES is set to "1".
     """
+    if not benchmark_writes_enabled():
+        raise PermissionError(
+            f"Benchmark writes are disabled. Set {BENCHMARK_WRITE_OPT_IN_ENV}=1 to allow them."
+        )
     if not rows:
         return 0
 

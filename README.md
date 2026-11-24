@@ -161,8 +161,10 @@ uv run scripts/analyze_evaluation_matrix.py
 uv run scripts/analyze_evaluation_runs.py --run-ids <run-id>
 
 # Interactive error analysis (Streamlit app)
-uv run streamlit run scripts/eval_analysis_app.py
+uv run streamlit run scripts/eval_analysis_app.py --server.address 127.0.0.1
 ```
+
+The dashboard has no authentication, so it listens on 127.0.0.1 only (also set in `scripts/.streamlit/config.toml`). For remote access, use an SSH tunnel or a reverse proxy with authentication rather than binding to a public interface. Its "Apply Updates" button edits questions and ground truths in `src/db/db.db` and is disabled unless the dashboard is started with `COBBIE_ALLOW_BENCHMARK_WRITES=1`.
 
 ## Supported LLM Providers
 
