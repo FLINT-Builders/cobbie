@@ -1,6 +1,10 @@
 """Streamlit app for interactive evaluation run analysis.
 
-Launch with: uv run streamlit run scripts/eval_analysis_app.py
+Launch with: uv run streamlit run scripts/eval_analysis_app.py --server.address 127.0.0.1
+
+The app has no authentication, so it binds to loopback by default
+(see scripts/.streamlit/config.toml). Editing the benchmark from the
+"Apply Updates" button requires COBBIE_ALLOW_BENCHMARK_WRITES=1.
 """
 
 import mlflow
@@ -14,7 +18,11 @@ from src.analysis.data_extraction import (
     load_run_dataframe,
 )
 from src.config import MLFLOW_URI
-from src.db.query import update_ifc_bench_rows
+from src.db.query import (
+    BENCHMARK_WRITE_OPT_IN_ENV,
+    benchmark_writes_enabled,
+    update_ifc_bench_rows,
+)
 
 st.set_page_config(page_title="Cobbie Eval Analysis", layout="wide")
 mlflow.set_tracking_uri(MLFLOW_URI)
@@ -130,7 +138,12 @@ with tab1:
                 # Apply Updates button
                 if st.button("Apply Updates", type="primary"):
                     rows_to_update = edited_df[edited_df["update"]].to_dict("records")
-                    if rows_to_update:
+                    if not benchmark_writes_enabled():
+                        st.warning(
+                            "Benchmark writes are disabled. Restart the dashboard with "
+                            f"{BENCHMARK_WRITE_OPT_IN_ENV}=1 to apply updates."
+                        )
+                    elif rows_to_update:
                         count = update_ifc_bench_rows(rows_to_update)
                         st.success(f"Updated {count} row(s) in the database.")
                         # Clear cache so next load reflects changes
