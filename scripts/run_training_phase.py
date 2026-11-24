@@ -94,7 +94,7 @@ def handle_start_state(context: Context) -> Tuple[TrainingState, Context]:
         Next state: RUN_COBBIE
     """
     # Check tool count
-    current_tools = get_created_tools()
+    current_tools = get_created_tools(include_unreviewed=True)
 
     if len(current_tools) > context.max_tools:
         num_to_delete = len(current_tools) - context.max_tools
@@ -122,12 +122,12 @@ def handle_start_state(context: Context) -> Tuple[TrainingState, Context]:
             mlflow.log_metrics(
                 {
                     f"tools_deleted_at_q{context.global_question_num}": deleted_count,
-                    "current_tool_count": len(get_created_tools()),
+                    "current_tool_count": len(get_created_tools(include_unreviewed=True)),
                 }
             )
 
     # Load available tools
-    context.tools = get_created_tools()
+    context.tools = get_created_tools(include_unreviewed=True)
 
     # Track tool inclusion
     available_tool_names = list(context.tools.keys())
@@ -923,7 +923,7 @@ def handle_decide_tool_fate(context: Context) -> Tuple[TrainingState, Context]:
                 )
 
                 # Reload tools to include the new one
-                context.tools = get_created_tools()
+                context.tools = get_created_tools(include_unreviewed=True)
                 logger.info(f"Tools reloaded. Now have {len(context.tools)} tools")
 
                 return TrainingState.END, context
@@ -1048,7 +1048,7 @@ def handle_decide_tool_fate(context: Context) -> Tuple[TrainingState, Context]:
                     )
 
                     # Reload tools
-                    context.tools = get_created_tools()
+                    context.tools = get_created_tools(include_unreviewed=True)
                     return TrainingState.END, context
                 else:
                     logger.error(f"Failed to save tool: {context.tool_name}")
@@ -1175,7 +1175,7 @@ def main():
         if initialized_count > 0:
             logger.info(f"Initialized metadata for {initialized_count} existing tools")
 
-        initial_tools = get_created_tools()
+        initial_tools = get_created_tools(include_unreviewed=True)
 
         # Log immutable configuration parameters (only for new runs)
         if run_id is None:
@@ -1303,7 +1303,7 @@ def main():
         logger.info(f"Success rate: {aggregate_metrics.get('success_rate', 0):.2%}")
 
         # Get final tool count
-        final_tools = get_created_tools()
+        final_tools = get_created_tools(include_unreviewed=True)
         logger.info(
             f"Final tool count: {len(final_tools)} (started with {len(initial_tools)})"
         )

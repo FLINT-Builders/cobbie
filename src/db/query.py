@@ -337,7 +337,7 @@ def initialize_tool_metadata(global_question_num: int) -> int:
     """
     from src.util import get_created_tools
 
-    existing_tools = get_created_tools()
+    existing_tools = get_created_tools(include_unreviewed=True)
     initialized_count = 0
 
     with Session(db.ENGINE) as session:

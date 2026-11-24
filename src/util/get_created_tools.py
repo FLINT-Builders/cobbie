@@ -6,11 +6,15 @@ from loguru import logger
 
 
 # Import all functions from each file
-def get_created_tools(tools: List[Callable] = []) -> Dict[str, Callable]:  # type: ignore[assignment]
+def get_created_tools(
+    tools: List[Callable] = [],  # type: ignore[assignment]
+    include_unreviewed: bool = False,
+) -> Dict[str, Callable]:
     """
     Return a Dict[str, Callable] with all the name and functions from:
     - the provided tools parameter
-    - the functions in the tools/created directory
+    - the functions in the tools/created directory (reviewed ones only, unless
+      include_unreviewed is set; created tools only run in the sandbox)
 
     DEPRECATED: Use get_tools(['created']) instead.
     Kept for backward compatibility with existing code.
@@ -24,7 +28,9 @@ def get_created_tools(tools: List[Callable] = []) -> Dict[str, Callable]:  # typ
         fn_dict[fn.__name__] = fn  # type: ignore[attr-defined]
 
     # Add created tools
-    created = get_tools_from_directory("created", allow_deletion=True)
+    created = get_tools_from_directory(
+        "created", allow_deletion=True, include_unreviewed=include_unreviewed
+    )
     fn_dict.update(created)
 
     return fn_dict

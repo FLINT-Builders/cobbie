@@ -49,7 +49,7 @@ def display_tool_stats(
     total_in_db = len(all_stats)
 
     # Get existing tools to filter and identify deleted ones
-    existing_tools = get_created_tools()
+    existing_tools = get_created_tools(include_unreviewed=True)
     existing_tool_names = set(existing_tools.keys())
 
     # Filter stats based on show_all flag
