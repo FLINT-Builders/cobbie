@@ -15,7 +15,6 @@ from loguru import logger
 
 from src.agents import (
     assess_helper_function,
-    cobbie,
     create_helper_function,
     debug_helper_function,
     derive_binary_classification,
@@ -23,6 +22,7 @@ from src.agents import (
     identify_helper_function,
     verify_answer,
 )
+from src.agents.cobbie import cobbie
 from src.config import ROOT_PATH
 from src.schemas.agent_error import AgentError
 from src.db import TRAINSET
