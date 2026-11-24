@@ -57,6 +57,10 @@ pythonpath = [".", "src"]
 [tool.ty.rules]
 possibly-missing-attribute = "ignore"
 
+[tool.uv]
+# certifi < 2026.10.18 trusts emSign ECC Root CA - G3, whose revoked intermediates have compromised keys.
+constraint-dependencies = ["certifi>=2026.10.19"]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.1",
