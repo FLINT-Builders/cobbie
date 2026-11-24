@@ -1,10 +1,10 @@
-import os
 from typing import Optional
 
 from loguru import logger
 
 from src.config import CREATED_TOOLS_PATH
 from src.db.query import register_new_tool
+from src.util.tool_file import write_tool_source
 
 def save_new_tool(function_name: str, function_implementation: str, directory_path:Optional[str] = None, global_question_num: Optional[int] = None)->bool:
     """
@@ -20,14 +20,16 @@ def save_new_tool(function_name: str, function_implementation: str, directory_pa
         True if save succeeded, False otherwise
     """
     tool_directory = directory_path or CREATED_TOOLS_PATH
-    file_path = os.path.join(tool_directory, f"{function_name}.py")
-    with open(file=file_path, mode="w") as file:
-        file.write(function_implementation)
-        logger.info(f"New function saved to {file_path}")
+    try:
+        file_path = write_tool_source(tool_directory, function_name, function_implementation)
+    except (ValueError, OSError) as e:
+        logger.error(f"Refusing to save tool {function_name!r}: {e}")
+        return False
+    logger.info(f"New function saved to {file_path}")
 
-        # Register tool in database if global_question_num provided
-        if global_question_num is not None:
-            register_new_tool(function_name, global_question_num)
-            logger.info(f"Tool '{function_name}' registered at question {global_question_num}")
+    # Register tool in database if global_question_num provided
+    if global_question_num is not None:
+        register_new_tool(function_name, global_question_num)
+        logger.info(f"Tool '{function_name}' registered at question {global_question_num}")
 
-        return True
+    return True
