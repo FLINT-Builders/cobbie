@@ -1,7 +1,10 @@
 """Hybrid retrieval pipeline: dense + BM25 + RRF fusion + reranking."""
 
+import importlib.util
 import sys
 import time
+from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import mlflow
@@ -14,6 +17,17 @@ from src.util.python_executor import count_tokens
 
 # Jina reranker v3 MLX - optimized for Apple Silicon
 RERANKER_MODEL = "jinaai/jina-reranker-v3-mlx"
+# Reviewed commit of RERANKER_MODEL. Its rerank.py is executed in this process,
+# so only change this to a full commit sha whose Python files have been reviewed.
+RERANKER_REVISION = "1d19fe38ae4e6658221479747c1152d6136dd6ab"
+RERANKER_FILES = [
+    "rerank.py",
+    "*.safetensors",
+    "*.json",
+    "merges.txt",
+    "chat_template.jinja",
+]
+_RERANKER_MODULE_NAME = "_cobbie_jina_reranker_v3_mlx"
 
 # RRF constant (commonly k=60)
 RRF_K = 60
@@ -22,26 +36,48 @@ RRF_K = 60
 _reranker: Any = None
 
 
+def _load_reranker_module(model_path: Path) -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        _RERANKER_MODULE_NAME, model_path / "rerank.py"
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load rerank.py from {model_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[_RERANKER_MODULE_NAME] = module
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop(_RERANKER_MODULE_NAME, None)
+        raise
+    return module
+
+
 def get_reranker() -> Any:
     """Get or create the Jina reranker v3 MLX model instance."""
     global _reranker
     if _reranker is None:
         from huggingface_hub import snapshot_download
 
-        print(f"Loading reranker model: {RERANKER_MODEL} (MLX)...")
+        print(f"Loading reranker model: {RERANKER_MODEL}@{RERANKER_REVISION} (MLX)...")
 
-        # Download and get model path
-        model_path = snapshot_download(RERANKER_MODEL)
+        model_path = Path(
+            snapshot_download(
+                RERANKER_MODEL,
+                revision=RERANKER_REVISION,
+                allow_patterns=RERANKER_FILES,
+            )
+        )
+        # snapshot_download returns snapshots/<commit the Hub resolved>.
+        if model_path.name != RERANKER_REVISION:
+            raise RuntimeError(
+                f"Reranker snapshot {model_path.name!r} is not the pinned commit "
+                f"{RERANKER_REVISION!r}; refusing to load its code."
+            )
 
-        # Add model path to sys.path to import rerank module
-        if model_path not in sys.path:
-            sys.path.insert(0, model_path)
-
-        from rerank import MLXReranker  # type: ignore[import-not-found]
-
-        _reranker = MLXReranker(
-            model_path=model_path,
-            projector_path=f"{model_path}/projector.safetensors",
+        reranker_module = _load_reranker_module(model_path)
+        _reranker = reranker_module.MLXReranker(
+            model_path=str(model_path),
+            projector_path=str(model_path / "projector.safetensors"),
         )
         print("Reranker loaded.")
     return _reranker
