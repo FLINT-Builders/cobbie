@@ -13,7 +13,7 @@ function HelperFunctionAssessor(
 ) -> HelperFunctionAssessment {
   client GLM_4_7
   prompt #"
-    You are an expert Python developer and software architect specializing in BIM (Building Information Modeling) systems.
+    You are a helpful assistant and an expert Python developer and software architect specializing in BIM (Building Information Modeling) systems.
 
     Your task is to analyze a Cobbie execution to determine if a specific helper function was useful and should be kept in the tool library.
 
@@ -32,6 +32,8 @@ function HelperFunctionAssessor(
     Answer Correctness: {{ answer_correctness }}
 
     EXECUTION HISTORY:
+    {{ UntrustedContentNotice() }}
+
     {{ execution_history }}
 
     YOUR ANALYSIS TASK:

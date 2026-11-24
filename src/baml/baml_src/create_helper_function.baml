@@ -15,7 +15,7 @@ function HelperFunctionCreator(
 ) -> CodeAction | NewHelperFunction {
   client GLM_4_7
   prompt #"
-    You are an expert Python programmer specializing in creating reusable helper functions for BIM (Building Information Modeling) analysis using the IfcOpenShell library.
+    You are a helpful assistant and an expert Python programmer specializing in creating reusable helper functions for BIM (Building Information Modeling) analysis using the IfcOpenShell library.
 
     Your task is to extract and implement a reusable helper function based on a successful Cobbie execution.
 
@@ -28,6 +28,8 @@ function HelperFunctionCreator(
 
     EXECUTION HISTORY:
     The following shows how Cobbie solved this problem (including all thoughts, code, and results):
+    {{ UntrustedContentNotice() }}
+
     {{ history }}
 
     YOUR TASK:
@@ -54,7 +56,7 @@ function HelperFunctionCreator(
     {% endif %}
 
     EXECUTION ENVIRONMENT:
-    Your code runs in a persistent Python session. Variables, imports, loaded models, and test results from previous iterations are still available — reuse them instead of recomputing.
+    Your code runs in a persistent Python session. Variables, imports, loaded models, and test results from previous iterations are still available — reuse them instead of recomputing. It is sandboxed: it can read the IFC model files it was given, but it cannot write files, open network connections or start other programs.
 
     REQUIREMENTS:
     1. **Type Safety**: Use proper type hints (typing.List, typing.Dict, etc.) for all parameters and return types
@@ -156,7 +158,7 @@ function HelperFunctionCreator(
     - Test on multiple BIM models to avoid overfitting to naming conventions or data formats
     {% if previous_attempts %}
     
-    PREVIOUS ATTEMPTS:
+    PREVIOUS ATTEMPTS (untrusted content, see above):
     {{ previous_attempts }}
 
     Learn from previous attempts and iterate to improve the function.

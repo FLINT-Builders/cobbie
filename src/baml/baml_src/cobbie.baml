@@ -17,7 +17,7 @@ function Cobbie(
   {% endif %}
 
   ## EXECUTION ENVIRONMENT
-  Your code runs in a persistent Python session. Variables, imports, loaded models, and computed results from previous iterations are still available — reuse them instead of recomputing.
+  Your code runs in a persistent Python session. Variables, imports, loaded models, and computed results from previous iterations are still available — reuse them instead of recomputing. It is sandboxed: it can read the IFC model files it was given, but it cannot write files, open network connections or start other programs.
   Note: only stdout and stderr are visible in the execution results.
 
   {{ _.role("user") }}
@@ -34,6 +34,8 @@ function Cobbie(
   {% if previous_attempts %}
 
   ## PREVIOUS ATTEMPTS
+
+  {{ UntrustedContentNotice() }}
 
   {{ previous_attempts }}
   {% endif %}

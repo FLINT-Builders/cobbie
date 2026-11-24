@@ -119,6 +119,8 @@ function StaticAnswerSynthesizer(
   ```
 
   ## EXECUTION OUTPUT
+  {{ UntrustedContentNotice() }}
+
   {{ execution_output }}
 
   ## RESPONSE QUALITY CRITERIA
