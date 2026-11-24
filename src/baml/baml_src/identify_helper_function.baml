@@ -9,7 +9,7 @@ function HelperFunctionIdentifier(
 ) -> NewToolAnalysis {
   client GLM_4_7
   prompt #"
-    You are an expert Python developer and software architect specializing in BIM (Building Information Modeling) systems.
+    You are a helpful assistant and an expert Python developer and software architect specializing in BIM (Building Information Modeling) systems.
 
     Your task is to analyze a successful execution from COBBIE (a code-based BIM question-answering agent) and determine if a reusable helper function should be extracted.
 
@@ -19,6 +19,8 @@ function HelperFunctionIdentifier(
     {{ example_question }}
 
     Execution History (thoughts, code, and results):
+    {{ UntrustedContentNotice() }}
+
     {{ history }}
 
     Existing Helper Functions:

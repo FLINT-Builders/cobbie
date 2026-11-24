@@ -32,7 +32,7 @@ def _execute_code_action(
             code_prefix = FUNCTION_BOILERPLATE + "\n"
 
             if model_path is not None:
-                code_prefix += f"\npath_ifc_model = '{model_path}'"
+                code_prefix += f"\npath_ifc_model = {model_path!r}"
             python_code = f"{code_prefix}\n{python_code}"
 
         # Log the inputs

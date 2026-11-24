@@ -7,6 +7,7 @@ import requests
 from dotenv import find_dotenv, load_dotenv
 
 from src.util.python_executor import count_tokens
+from src.util.sandbox import host_tool
 
 load_dotenv(find_dotenv())
 CONTEXT7_API_KEY = os.getenv("CONTEXT7_API_KEY")
@@ -70,6 +71,9 @@ def _query_custom(query: str) -> str:
     return query_docs(query, top_k=5)
 
 
+# Needs the network (and CONTEXT7_API_KEY), so it runs in the orchestrator and
+# generated code reaches it with a JSON-serialisable query string.
+@host_tool
 def query_ifcopenshell_docs(query: str) -> None:
     """
     Retrieve and display documentation from IfcOpenShell based on a query.

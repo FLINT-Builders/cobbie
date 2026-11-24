@@ -155,7 +155,9 @@ def _debug_helper_function(
             logger.warning(f"BIM models directory not found at {bim_models_dir}")
 
     # Setup stateful interpreter (persists across iterations)
-    interpreter = setup_interpreter(ifc_model_path, tools)
+    interpreter = setup_interpreter(
+        ifc_model_path, tools, readable_paths=other_bim_models_for_testing
+    )
 
     # Initialize execution history
     previous_attempts = ""

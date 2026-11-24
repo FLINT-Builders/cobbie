@@ -13,6 +13,12 @@ DIRECTORY_IFC_MODELS_PATH = os.path.join(ROOT_PATH, "src/db/bim_models")
 CREATED_TOOLS_PATH = os.path.join(ROOT_PATH, "src/tools/created")
 INITIAL_TOOLS_PATH = os.path.join(ROOT_PATH, "src/tools/initial")
 MANUAL_TOOLS_PATH = os.path.join(ROOT_PATH, "src/tools/manual")
+# sha256 of every created tool a person has reviewed (scripts/review_created_tools.py)
+REVIEWED_CREATED_TOOLS_PATH = os.path.join(ROOT_PATH, "src/tools/reviewed_created_tools.json")
+
+# Limits for the sandboxed interpreter that runs generated code (src/util/sandbox.py)
+SANDBOX_TIMEOUT_SECONDS = 600
+SANDBOX_MEMORY_LIMIT_MB = 8192
 
 # URI
 MLFLOW_URI = "http://127.0.0.1:5000"

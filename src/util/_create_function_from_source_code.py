@@ -1,21 +1,8 @@
-# Pre-import common modules that might be needed in generated code
-import math
 import textwrap
 from typing import Any, Callable, Dict, Optional
 
-import ifcopenshell
-import ifcopenshell.entity_instance
-import ifcopenshell.file
-import ifcopenshell.geom
-import ifcopenshell.util.element
-import ifcopenshell.util.geolocation
-import ifcopenshell.util.placement
-import ifcopenshell.util.shape
-import ifcopenshell.util.system
-import numpy
-import pandas
-
 from src.schemas import Result, ok, err
+from src.util.sandbox import source_tool
 from ._extract_function_metadata import _extract_function_metadata
 
 
@@ -27,81 +14,34 @@ def _create_function_from_source_code(
 ) -> Result[Callable, str]:
     """
     Create a callable tool from the generated code that can be used by the assessor.
-    The tool executes the function in isolation without exposing implementation details.
+
+    The code is parsed, never executed here: the returned tool describes the
+    function (name, signature, docstring) and only runs inside the sandboxed
+    interpreter, where it is defined with the default helper imports
+    (ifcopenshell and its utilities, math, numpy, pandas). Exceptions raised by
+    the tool are returned as an error string, as before.
 
     Args:
         code: The source code containing the function to create
         function_name: The name of the function to extract from the code
-        imports: Optional dictionary of modules to make available in the global scope.
-                Keys are module names, values are the imported modules.
-        merge_with_defaults: If True, merge provided imports with default imports.
-                           If False, use only the provided imports (plus __builtins__).
+        imports: Not supported any more; generated tools get the default imports
+                 inside the sandbox.
+        merge_with_defaults: Kept for backward compatibility.
 
     Returns:
         Result[Callable, str]: Ok(function) on success, Err(error_message) on failure.
                               Use .is_ok() and .is_err() to check the result status.
     """
+    if imports is not None:
+        return err("Custom imports are not supported: generated tools run in the sandbox with the default imports")
+
     # Clean up the code string - remove common leading whitespace
     cleaned_code = textwrap.dedent(code).strip()
 
-    # Prepare default imports
-    default_imports = {
-        "ifcopenshell": ifcopenshell,
-        "ifcopenshell.util.element": ifcopenshell.util.element,
-        "ifcopenshell.util.shape": ifcopenshell.util.shape,
-        "ifcopenshell.util.placement": ifcopenshell.util.placement,
-        "ifcopenshell.util.geolocation": ifcopenshell.util.geolocation,
-        "ifcopenshell.util.system": ifcopenshell.util.system,
-        "ifcopenshell.geom": ifcopenshell.geom,
-        "ifcopenshell.file": ifcopenshell.file,
-        "ifcopenshell.entity_instance": ifcopenshell.entity_instance,
-        "math": math,
-        "numpy": numpy,
-        "pandas": pandas,
-    }
-
-    # Determine which imports to use
-    if imports is None:
-        final_imports = default_imports
-    elif merge_with_defaults:
-        final_imports = {**default_imports, **imports}  # imports override defaults
-    else:
-        final_imports = imports
-
-    # Execute the code to create the function
-    global_scope = {"__builtins__": __builtins__, **final_imports}
-    local_scope = {}
-
     try:
-        exec(cleaned_code, global_scope, local_scope)
-        generated_function = local_scope.get(function_name)
-
-        if not generated_function:
-            raise ValueError(f"Function {function_name} not found in generated code")
-
         # Extract function metadata to get the signature
         metadata = _extract_function_metadata(cleaned_code, function_name)
-
-        # Create a dynamic wrapper that matches the original function signature
-        def create_dynamic_wrapper():
-            import inspect
-
-            sig = inspect.signature(generated_function)
-
-            # Create wrapper function dynamically with the same signature
-            def tool_wrapper(*args, **kwargs):
-                """Dynamic tool wrapper for generated function that preserves return type."""
-                try:
-                    result = generated_function(*args, **kwargs)
-                    return result  # Return the actual result, don't convert to string
-                except Exception as e:
-                    return f"Error processing the function with the `tool_wrapper` {function_name}: {str(e)}"
-
-            # Copy the signature from the original function to the wrapper
-            tool_wrapper.__signature__ = sig  # type: ignore
-            return tool_wrapper
-
-        tool_wrapper = create_dynamic_wrapper()
+        tool_wrapper = source_tool(cleaned_code, function_name, wrap_errors=True)
 
         # Set the function name and docstring for the tool
         tool_wrapper.__name__ = function_name
@@ -229,9 +169,15 @@ def get_emergency_exit_doors(path_ifc_model: str):
     )
 
     if creation_result.is_ok():
+        from src.util.python_executor import execute_python
+
         print(f"✓ Successfully created function: {function_name}")
         get_emergency_exit_doors = creation_result.unwrap()
-        result = get_emergency_exit_doors(TEST_IFC_PATH)
+        result = execute_python(
+            f"print({function_name}(path_ifc_model))",
+            tools={function_name: get_emergency_exit_doors},
+            model_path=TEST_IFC_PATH,
+        )
         print(f"---\nResult of function {function_name}:\n{result}\n")
         print(
             f"docstring of function: {function_name}:\n {get_emergency_exit_doors.__doc__}"

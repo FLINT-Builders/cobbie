@@ -51,7 +51,7 @@ logs.log
 scripts/text_count_tokens.txt
 .claude/*
 .agents/
-src/baml/baml_client
+src/baml/generated/
 
 # External cloned repos (for docs indexing)
 src/docs_indexer/external/

@@ -14,7 +14,7 @@ function HelperFunctionDebugger(
 ) -> CodeAction | UpdatedHelperFunction {
   client GLM_4_7
   prompt #"
-    You are an expert Python developer and software architect specializing in BIM (Building Information Modeling) systems.
+    You are a helpful assistant and an expert Python developer and software architect specializing in BIM (Building Information Modeling) systems.
 
     Your task is to iteratively analyze and fix a FAULTY helper function. You can write Python code to test, debug, and validate your fixes before providing the final implementation.
 
@@ -53,7 +53,7 @@ function HelperFunctionDebugger(
     You can execute code to test your implementation and query documentation simultaneously in the same iteration.
 
     EXECUTION ENVIRONMENT:
-    Your code runs in a persistent Python session. Variables, imports, loaded models, and test results from previous iterations are still available — reuse them instead of recomputing.
+    Your code runs in a persistent Python session. Variables, imports, loaded models, and test results from previous iterations are still available — reuse them instead of recomputing. It is sandboxed: it can read the IFC model files it was given, but it cannot write files, open network connections or start other programs.
 
     FAULTY FUNCTION ANALYSIS:
 
@@ -66,6 +66,8 @@ function HelperFunctionDebugger(
 
     Error Description:
     {{ error_description }}
+
+    {{ UntrustedContentNotice() }}
 
     {% if history_faulty_tool_use %}
     HISTORY OF THE FAULTY TOO USE:

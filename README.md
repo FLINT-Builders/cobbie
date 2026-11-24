@@ -60,7 +60,8 @@ cobbie/
 │   ├── analysis/         # Evaluation data extraction and analysis
 │   ├── baml/
 │   │   ├── baml_src/     # BAML agent definitions (source of truth)
-│   │   └── baml_client/  # Auto-generated client (gitignored)
+│   │   ├── baml_client/  # Client entry point (frames untrusted prompt arguments)
+│   │   └── generated/    # Auto-generated client (gitignored)
 │   ├── baseline/         # Static baseline implementations
 │   ├── db/               # Database layer, models, and queries
 │   │   └── bim_models/   # IFC model files (gitignored, download from HF)
