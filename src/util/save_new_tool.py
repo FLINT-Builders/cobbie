@@ -5,6 +5,7 @@ from loguru import logger
 
 from src.config import CREATED_TOOLS_PATH
 from src.db.query import register_new_tool
+from src.util.tool_names import is_valid_tool_name
 
 def save_new_tool(function_name: str, function_implementation: str, directory_path:Optional[str] = None, global_question_num: Optional[int] = None)->bool:
     """
@@ -19,6 +20,10 @@ def save_new_tool(function_name: str, function_implementation: str, directory_pa
     Returns:
         True if save succeeded, False otherwise
     """
+    if not is_valid_tool_name(function_name):
+        logger.error(f"Refusing to save tool with invalid name: {function_name!r}")
+        return False
+
     tool_directory = directory_path or CREATED_TOOLS_PATH
     file_path = os.path.join(tool_directory, f"{function_name}.py")
     with open(file=file_path, mode="w") as file:

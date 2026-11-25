@@ -12,6 +12,8 @@ from .delete_tool import delete_tool
 from .extract_tool_usage import extract_tools_used
 from .code_act_inner_loop import _execute_code_action
 from .baml_retry import call_baml_with_retry
+from .sandbox import SandboxedInterpreter, SandboxedTool, load_tool_from_source
+from .tool_names import is_valid_tool_name
 # NOTE: metrics module not imported here to avoid circular import with answer_verifier
 # Import directly from src.util.metrics if needed
 
@@ -32,4 +34,8 @@ __all__ = [
     "extract_tools_used",
     "_execute_code_action",
     "call_baml_with_retry",
+    "SandboxedInterpreter",
+    "SandboxedTool",
+    "load_tool_from_source",
+    "is_valid_tool_name",
 ]

@@ -19,6 +19,8 @@ function HelperFunctionCreator(
 
     Your task is to extract and implement a reusable helper function based on a successful Cobbie execution.
 
+    {{ UntrustedRule() }}
+
     CONTEXT:
     Cobbie successfully answered the following question:
     Question: {{ example_question }}
@@ -28,17 +30,15 @@ function HelperFunctionCreator(
 
     EXECUTION HISTORY:
     The following shows how Cobbie solved this problem (including all thoughts, code, and results):
-    {{ history }}
+    {{ Untrusted("history", history) }}
 
     YOUR TASK:
     {% if is_enhancement %}
     Enhance existing helper function:
     - Name: {{ function_name }}
     - Enhancement: {{ function_description }}
-    - Current Implementation:
-    ```python
-    {{ existing_implementation }}
-    ```
+    - Current Implementation (Python source):
+    {{ Untrusted("existing_implementation", existing_implementation or "") }}
 
     ENHANCEMENT REQUIREMENTS:
     1. Add optional parameters with sensible defaults (backward compatible)
@@ -157,7 +157,7 @@ function HelperFunctionCreator(
     {% if previous_attempts %}
     
     PREVIOUS ATTEMPTS:
-    {{ previous_attempts }}
+    {{ Untrusted("previous_attempts", previous_attempts) }}
 
     Learn from previous attempts and iterate to improve the function.
     {% endif %}

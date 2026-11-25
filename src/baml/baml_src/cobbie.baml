@@ -20,6 +20,8 @@ function Cobbie(
   Your code runs in a persistent Python session. Variables, imports, loaded models, and computed results from previous iterations are still available — reuse them instead of recomputing.
   Note: only stdout and stderr are visible in the execution results.
 
+  {{ UntrustedRule() }}
+
   {{ _.role("user") }}
   Question: {{ user_input }}
 
@@ -35,7 +37,7 @@ function Cobbie(
 
   ## PREVIOUS ATTEMPTS
 
-  {{ previous_attempts }}
+  {{ Untrusted("previous_attempts", previous_attempts) }}
   {% endif %}
 
   ## EXPLORATION APPROACH
