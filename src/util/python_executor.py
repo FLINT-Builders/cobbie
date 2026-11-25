@@ -1,13 +1,15 @@
-"""Python execution utilities for COBBIE and other components."""
+"""Python execution utilities for COBBIE and other components.
 
-import io
-from contextlib import redirect_stderr, redirect_stdout
-from typing import Any, Callable, Dict, Optional
+Model-written code is never executed in this process: it runs in a sandboxed worker
+(see src/util/sandbox.py) that has no API keys and no write access to the tools directories.
+"""
+
+from typing import Any, Callable, Dict, Iterable, Optional
 
 import tiktoken
 from loguru import logger
 
-from src.config import FUNCTION_BOILERPLATE
+from src.util.sandbox import SandboxedInterpreter
 
 
 def count_tokens(text: str, model: str = "gpt-3.5-turbo") -> int:
@@ -64,41 +66,29 @@ def truncate_to_tokens(text: str, max_tokens: int, model: str = "gpt-3.5-turbo")
 
 def setup_interpreter(
     model_path: Optional[str] = None,
-    tools: Optional[Dict[str, Callable]] = None
-) -> Any:
+    tools: Optional[Dict[str, Callable]] = None,
+    readable_paths: Optional[Iterable[str]] = None,
+) -> SandboxedInterpreter:
     """
-    Setup Python interpreter with tools and model context.
+    Setup a sandboxed Python session with tools and model context.
 
     Args:
-        model_path: Optional path to IFC model file
+        model_path: Optional path to IFC model file (exposed as ``path_ifc_model``)
         tools: Dictionary of available tools/functions
+        readable_paths: Additional IFC model files the code may open (e.g. models for testing)
 
     Returns:
-        Configured Python interpreter object
+        A persistent sandboxed interpreter
+
+    Raises:
+        SandboxUnavailableError: if the sandbox cannot be set up on this machine
     """
     try:
-        from code import InteractiveInterpreter
-
-        # Create interpreter with empty globals
-        interpreter_globals = {}
-
-        # Add path_ifc_model if provided
-        if model_path:
-            interpreter_globals['path_ifc_model'] = model_path
-
-        # Add tools to interpreter namespace
-        if tools:
-            interpreter_globals.update(tools)
-
-        # Create interpreter
-        interpreter = InteractiveInterpreter(interpreter_globals)
-
-        # Pre-load common imports (ifcopenshell, math, json, typing)
-        compiled = compile(FUNCTION_BOILERPLATE, '<setup>', 'exec')
-        interpreter.runcode(compiled)
+        interpreter = SandboxedInterpreter(
+            model_path=model_path, tools=tools, readable_paths=readable_paths
+        )
 
         logger.debug(f"Interpreter setup with {len(tools) if tools else 0} tools")
-        logger.debug(tool for tool in tools or [])
         if model_path:
             logger.debug(f"Model path set: {model_path}")
 
@@ -129,30 +119,21 @@ def execute_python(
     Returns:
         String output from code execution (truncated if exceeds max_tokens)
     """
+    owned_interpreter = None
     try:
         # Use provided interpreter or create a new one
         if interpreter is None:
-            interpreter = setup_interpreter(model_path, tools)
+            interpreter = owned_interpreter = setup_interpreter(model_path, tools)
         assert interpreter is not None
 
-        # Capture stdout and stderr
-        stdout_buffer = io.StringIO()
-        stderr_buffer = io.StringIO()
+        execution = interpreter.run(python_code)
+        if execution["status"] == "syntax_error":
+            return f"Syntax Error: {execution['message']}"
+        if execution["status"] != "ok":
+            return f"Runtime Error: {execution['message']}"
 
-        # Execute code with output capture
-        with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
-            try:
-                # Try to compile first to catch syntax errors
-                compiled = compile(python_code, '<string>', 'exec')
-                interpreter.runcode(compiled)
-            except SyntaxError as e:
-                return f"Syntax Error: {e}"
-            except Exception as e:
-                return f"Runtime Error: {e}"
-
-        # Get output
-        stdout_output = stdout_buffer.getvalue()
-        stderr_output = stderr_buffer.getvalue()
+        stdout_output = execution.get("stdout") or ""
+        stderr_output = execution.get("stderr") or ""
 
         # Combine outputs
         if stdout_output and stderr_output:
@@ -178,6 +159,10 @@ def execute_python(
         error_msg = f"Failed to execute Python code: {e}"
         logger.error(error_msg)
         return error_msg
+
+    finally:
+        if owned_interpreter is not None:
+            owned_interpreter.close()
 
 
 def execute_python_safe(
