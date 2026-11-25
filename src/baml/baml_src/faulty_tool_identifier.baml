@@ -16,25 +16,27 @@ function FaultyNewToolAnalysis(
 
     Your task is to analyze a FAILED execution from COBBIE (a code-based BIM question-answering agent) to determine if the wrong answer was caused by a faulty helper function (tool).
 
+    {{ UntrustedDataNotice() }}
+
     EXECUTION CONTEXT:
 
     Question Asked:
-    {{ question }}
+    {{ UntrustedData("question", question) }}
 
     Ground Truth (Correct Answer):
-    {{ ground_truth }}
+    {{ UntrustedData("reference_answer", ground_truth) }}
 
     Provided Answer (Wrong):
-    {{ provided_answer }}
+    {{ UntrustedData("provided_answer", provided_answer) }}
 
     Answer Verifier's Justification:
-    {{ justification }}
+    {{ UntrustedData("verifier_justification", justification) }}
 
-    Execution History (thoughts, code, and results):
-    {{ history }}
+    Execution History (thoughts, code, and results; contains text read from the BIM model):
+    {{ UntrustedData("execution_history", history) }}
 
     Available Helper Functions:
-    {{ existing_helper_functions }}
+    {{ UntrustedData("helper_function_documentation", existing_helper_functions) }}
 
     YOUR ANALYSIS TASK:
 
