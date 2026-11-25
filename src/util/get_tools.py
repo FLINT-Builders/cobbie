@@ -57,6 +57,9 @@ def get_tools_from_directory(
 
     fn_dict: Dict[str, Callable] = {}
 
+    if directory == "created":
+        return _get_created_tools(tool_path, python_files, allow_deletion)
+
     for module_name in python_files:
         try:
             # Use absolute import path
@@ -96,6 +99,50 @@ def get_tools_from_directory(
             continue
 
     logger.debug(f"Loaded {len(fn_dict)} tools from {directory}/: {list(fn_dict.keys())}")
+    return fn_dict
+
+
+def _get_created_tools(
+    tool_path: str, python_files: List[str], allow_deletion: bool
+) -> Dict[str, Callable]:
+    """
+    Created tools are model-written, so they are imported only inside the sandbox
+    (src.util.sandbox); the host gets SandboxedTool descriptors (name, signature,
+    docstring) that the sandboxed interpreter loads by module name.
+    """
+    from src.util.sandbox import describe_tool_modules
+
+    module_names = [name for name in python_files if name.isidentifier()]
+    for name in sorted(set(python_files) - set(module_names)):
+        logger.warning(f"Skipping created tool file with an invalid module name: {name}.py")
+
+    fn_dict: Dict[str, Callable] = {}
+    try:
+        sandboxed_tools, failures = describe_tool_modules("src.tools.created", module_names)
+        fn_dict.update(sandboxed_tools)
+    except Exception as e:
+        logger.error(f"Could not load created tools in the sandbox: {e}")
+        return {}
+
+    for module_name, error in failures.items():
+        if module_name not in module_names:
+            continue
+        file_path = os.path.join(tool_path, f"{module_name}.py")
+        if allow_deletion:
+            logger.warning(
+                f"Could not import module '{module_name}' from created/. Deleting it. Error: {error}"
+            )
+            try:
+                os.remove(file_path)
+                logger.info(f"Successfully deleted problematic tool file: {file_path}")
+            except OSError as remove_error:
+                logger.error(f"Error deleting file {file_path}: {remove_error}")
+        else:
+            logger.error(
+                f"Could not import module '{module_name}' from created/. Keeping file. Error: {error}"
+            )
+
+    logger.debug(f"Loaded {len(fn_dict)} tools from created/: {list(fn_dict.keys())}")
     return fn_dict
 
 

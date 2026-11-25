@@ -20,6 +20,7 @@ An LLM-based multi-agent system for answering questions about BIM models in IFC 
 - Python 3.12+
 - [`uv`](https://docs.astral.sh/uv/) package manager
 - API keys for at least one supported LLM provider (see `.env.example`)
+- Linux with Landlock enabled (kernel 5.13+) or macOS: Python written by the agents runs in a sandboxed child process without API keys or write access to the project (`src/util/sandbox.py`), and is not executed when no sandbox is available
 
 ### Installation
 

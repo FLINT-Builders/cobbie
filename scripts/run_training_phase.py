@@ -34,12 +34,12 @@ from src.db.query import (
 )
 from src.schemas.training_context import Context
 from src.util import (
-    _create_function_from_source_code,
     delete_tool,
     extract_tools_used,
     generate_tools_docs,
     get_created_tools,
     get_function_code,
+    load_tool_from_source,
     save_new_tool,
     setup_logger,
 )
@@ -691,7 +691,7 @@ def handle_test_tool_with_cobbie(context: Context) -> Tuple[TrainingState, Conte
         else:
             raise ValueError("No tool implementation available for testing")
 
-        creation_result = _create_function_from_source_code(
+        creation_result = load_tool_from_source(
             function_name=context.tool_name,
             code=tool_implementation,
         )

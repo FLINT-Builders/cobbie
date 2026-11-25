@@ -5,6 +5,8 @@ from typing import Callable, Dict, List
 
 from loguru import logger
 
+from src.util.sandbox import SandboxedTool
+
 
 def generate_tools_docs(tools: Dict[str, Callable]) -> str:
     """
@@ -25,7 +27,11 @@ def generate_tools_docs(tools: Dict[str, Callable]) -> str:
         if callable(tool):
             try:
                 # Get function signature
-                sig = inspect.signature(tool)
+                sig = (
+                    tool.signature_text
+                    if isinstance(tool, SandboxedTool)
+                    else inspect.signature(tool)
+                )
                 
                 # Get docstring
                 docstring = inspect.getdoc(tool) or "No documentation available"
@@ -154,6 +160,8 @@ def validate_tools(tools: Dict[str, Callable]) -> List[str]:
             issues.append(f"Tool '{name}' has no __name__ attribute")
             
         # Try to get signature
+        if isinstance(tool, SandboxedTool):
+            continue
         try:
             inspect.signature(tool)
         except Exception as e:

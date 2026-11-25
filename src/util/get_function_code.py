@@ -2,6 +2,7 @@ import os
 from typing import Optional
 from src.config import CREATED_TOOLS_PATH
 from src.schemas import Result, ok, err, Err
+from src.util.tool_names import is_valid_tool_name
 
 
 def get_function_code(
@@ -20,6 +21,8 @@ def get_function_code(
     """
     try:
         if path is None:
+            if not is_valid_tool_name(function_name):
+                return err(error=f"Invalid tool name: {function_name!r}")
             path = os.path.join(CREATED_TOOLS_PATH, f"{function_name}.py")
 
         with open(file=path, mode="r") as file:
