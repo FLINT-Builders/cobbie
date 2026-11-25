@@ -8,6 +8,7 @@ from typing import Callable, Dict, List, Literal
 from loguru import logger
 
 from src.config import CREATED_TOOLS_PATH, INITIAL_TOOLS_PATH, MANUAL_TOOLS_PATH
+from src.util.generated_tool import GeneratedTool
 
 # Map directory names to their paths
 TOOL_PATHS = {
@@ -58,6 +59,29 @@ def get_tools_from_directory(
     fn_dict: Dict[str, Callable] = {}
 
     for module_name in python_files:
+        if directory == "created":
+            # Created tools are model-written: describe them from source, never import them here.
+            file_path = os.path.join(tool_path, f"{module_name}.py")
+            try:
+                with open(file_path, "r", encoding="utf-8") as file:
+                    source = file.read()
+                for tool in GeneratedTool.from_module_source(
+                    source, module=f"src.tools.created.{module_name}"
+                ):
+                    fn_dict[tool.__name__] = tool
+            except (SyntaxError, ValueError, UnicodeDecodeError, OSError) as e:
+                if allow_deletion:
+                    logger.warning(
+                        f"Could not parse created tool '{module_name}'. Deleting it. Error: {e}"
+                    )
+                    try:
+                        os.remove(file_path)
+                    except OSError as remove_error:
+                        logger.error(f"Error deleting file {file_path}: {remove_error}")
+                else:
+                    logger.error(f"Could not parse created tool '{module_name}'. Error: {e}")
+            continue
+
         try:
             # Use absolute import path
             module = importlib.import_module(f"src.tools.{directory}.{module_name}")
