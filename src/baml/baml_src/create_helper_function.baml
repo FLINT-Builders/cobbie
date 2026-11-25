@@ -28,7 +28,7 @@ function HelperFunctionCreator(
 
     EXECUTION HISTORY:
     The following shows how Cobbie solved this problem (including all thoughts, code, and results):
-    {{ history }}
+    {{ UntrustedExecutionHistory(history) }}
 
     YOUR TASK:
     {% if is_enhancement %}
@@ -157,7 +157,7 @@ function HelperFunctionCreator(
     {% if previous_attempts %}
     
     PREVIOUS ATTEMPTS:
-    {{ previous_attempts }}
+    {{ UntrustedExecutionHistory(previous_attempts) }}
 
     Learn from previous attempts and iterate to improve the function.
     {% endif %}

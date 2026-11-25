@@ -1,7 +1,7 @@
-import os
 from typing import Optional
 from src.config import CREATED_TOOLS_PATH
 from src.schemas import Result, ok, err, Err
+from src.util.tool_names import tool_file_path
 
 
 def get_function_code(
@@ -20,7 +20,7 @@ def get_function_code(
     """
     try:
         if path is None:
-            path = os.path.join(CREATED_TOOLS_PATH, f"{function_name}.py")
+            path = tool_file_path(function_name, CREATED_TOOLS_PATH)
 
         with open(file=path, mode="r") as file:
             code = file.read()

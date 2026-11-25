@@ -6,6 +6,7 @@ from loguru import logger
 
 from src.config import CREATED_TOOLS_PATH
 from src.db.query import delete_tool_from_db
+from src.util.tool_names import tool_file_path
 
 
 def delete_tool(tool_name: str) -> bool:
@@ -17,7 +18,7 @@ def delete_tool(tool_name: str) -> bool:
     """
     try:
         # Delete file
-        file_path = Path(CREATED_TOOLS_PATH) / f"{tool_name}.py"
+        file_path = Path(tool_file_path(tool_name, CREATED_TOOLS_PATH))
         if file_path.exists():
             file_path.unlink()
             logger.info(f"Deleted tool file: {file_path}")

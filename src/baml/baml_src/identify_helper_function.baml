@@ -19,7 +19,7 @@ function HelperFunctionIdentifier(
     {{ example_question }}
 
     Execution History (thoughts, code, and results):
-    {{ history }}
+    {{ UntrustedExecutionHistory(history) }}
 
     Existing Helper Functions:
     {{ existing_helper_functions }}

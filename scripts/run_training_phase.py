@@ -45,6 +45,7 @@ from src.util import (
 )
 from src.util.metrics import calculate_aggregate_metrics, log_qa_metrics
 from src.util.mlflow_utils import determine_run_id
+from src.util.tool_names import is_valid_tool_name
 
 # Initialize logger
 setup_logger()
@@ -78,6 +79,20 @@ class TrainingState(Enum):
 # ============================================================================
 # State Handler Functions
 # ============================================================================
+
+
+def _is_library_tool(context: Context, tool_name: str) -> bool:
+    """Whether `tool_name` names a tool already in the library loaded for this question."""
+    return is_valid_tool_name(tool_name) and tool_name in context.tools
+
+
+def _refuse_tool_name(
+    context: Context, action: str, tool_name: str
+) -> Tuple[TrainingState, Context]:
+    """Stop processing this question when an agent returns a tool name training must not act on."""
+    logger.warning(f"Refusing {action} for tool name {tool_name!r}")
+    context.error_message = f"Refused {action} for invalid or unknown tool name: {tool_name!r}"
+    return TrainingState.ERROR, context
 
 
 def handle_start_state(context: Context) -> Tuple[TrainingState, Context]:
@@ -346,12 +361,16 @@ def handle_identify_new_tool(context: Context) -> Tuple[TrainingState, Context]:
 
         # Handle new action field
         if result.action == "create_new":
+            if not is_valid_tool_name(result.tool_name) or result.tool_name in context.tools:
+                return _refuse_tool_name(context, result.action, result.tool_name)
             logger.info(f"Creating new tool: {result.tool_name}")
             context.tool_name = result.tool_name
             context.is_enhancement = False
             return TrainingState.CREATE_NEW_TOOL, context
 
         elif result.action == "enhance_existing":
+            if not _is_library_tool(context, result.tool_name):
+                return _refuse_tool_name(context, result.action, result.tool_name)
             logger.info(f"Enhancing existing tool: {result.tool_name}")
             context.tool_name = result.tool_name
             context.is_enhancement = True
@@ -444,7 +463,7 @@ def handle_create_new_tool(context: Context) -> Tuple[TrainingState, Context]:
             example_answer=context.qa_pair.ground_truth,
             example_bim_model=ifc_model_path,
             other_bim_models_for_testing=other_models,
-            function_name=context.identify_tool_result.tool_name,
+            function_name=context.tool_name,
             function_description=context.identify_tool_result.tool_description,
             is_enhancement=context.is_enhancement,
             existing_implementation=existing_implementation,
@@ -553,6 +572,8 @@ def handle_identify_faulty_tool(context: Context) -> Tuple[TrainingState, Contex
 
         # Decide next state
         if result.faulty_tool:
+            if not _is_library_tool(context, result.faulty_tool_name):
+                return _refuse_tool_name(context, "debug_faulty_tool", result.faulty_tool_name)
             context.tool_name = result.faulty_tool_name
             return TrainingState.DEBUG_FAULTY_TOOL, context
         else:
@@ -904,6 +925,9 @@ def handle_decide_tool_fate(context: Context) -> Tuple[TrainingState, Context]:
         else:
             raise ValueError("No tool implementation available")
 
+        # A tool approved as new must not replace a library file that exists by now
+        overwrite_existing = not (context.create_tool_result and not context.is_enhancement)
+
         # Decision logic based on recommendation
         if assessment.recommendation == "keep_tool":
             # Tool is helpful, save it permanently
@@ -911,6 +935,7 @@ def handle_decide_tool_fate(context: Context) -> Tuple[TrainingState, Context]:
                 function_name=context.tool_name,
                 function_implementation=tool_implementation,
                 global_question_num=context.global_question_num,
+                overwrite=overwrite_existing,
             )
 
             if save_success:
@@ -1036,6 +1061,7 @@ def handle_decide_tool_fate(context: Context) -> Tuple[TrainingState, Context]:
                     function_name=context.tool_name,
                     function_implementation=tool_implementation,
                     global_question_num=context.global_question_num,
+                    overwrite=overwrite_existing,
                 )
 
                 if save_success:
