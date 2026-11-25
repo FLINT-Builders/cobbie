@@ -8,6 +8,8 @@ Summaries are limited to ~16384 tokens for LLM context windows.
 import hashlib
 import json
 import os
+import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -25,22 +27,129 @@ MAX_TOKENS = 16384
 CHARS_PER_TOKEN = 4
 MAX_CHARS = MAX_TOKENS * CHARS_PER_TOKEN
 
+# Bump whenever the summary format or sanitization changes so that summaries
+# cached by an older version are never served again.
+SUMMARY_FORMAT_VERSION = 2
+
+# Every string copied from the IFC file is attacker-controlled. These limits
+# keep a single field from dominating the prompt.
+MAX_NAME_CHARS = 120
+MAX_TEXT_CHARS = 300
+REMOVED_TEXT = "[removed]"
+
+# Runs of angle brackets are reserved for the prompt's data fence.
+_FENCE_RE = re.compile(r"[<>]{2,}")
+_HEADING_RE = re.compile(r"#{2,}|`{3,}|={3,}|-{3,}")
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?;])\s+")
+_WHITESPACE_RE = re.compile(r"\s+")
+_INSTRUCTION_RE = re.compile(
+    r"|".join(
+        [
+            r"\b(ignore|disregard|forget|override|overrule|bypass|neglect|abandon)\b"
+            r".{0,80}\b(instructions?|guidelines?|rules?|prompts?|facts?|summary|"
+            r"context|above|previous|prior|earlier|system|everything|all)\b",
+            r"\byou\s+(are|must|should|will|shall|have\s+to|need\s+to)\b",
+            r"\b(act|behave|pretend|roleplay|role-play)\s+(as|like|to)\b",
+            r"\b(answer|respond|reply|output|say|state|return|print|write)\b\s+"
+            r"(exactly|only|verbatim|with|that|the\s+following)\b",
+            r"\b(correct|final|real|true|right)\s+answer\s+(is|=|:)",
+            r"\b(answer|reply|response|output)\s+(is|should\s+be|must\s+be|will\s+be)\b",
+            r"\b(always|never)\s+(answer|respond|reply|say|mention|output|use|report)\b",
+            r"\b(whatever|regardless|no\s+matter)\b.{0,40}\b(ask|asks|asked|question|questions)\b",
+            r"\b(any|every|all|each)\s+(questions?|quer(y|ies))\b",
+            r"\b(tell|inform|convince)\s+(the\s+)?(user|reader)\b",
+            r"\b(new|updated|real|actual|hidden|secret|additional)\s+"
+            r"(instructions?|tasks?|prompts?|rules?|directives?)\b",
+            r"\b(system|developer|assistant)\s+(prompts?|messages?|roles?|instructions?)\b",
+            r"\b(llm|language\s+model|chat\s*gpt|ai\s+model|ai\s+assistant)\b",
+            r"\bresponse\s+guidelines?\b",
+            r"\buser\s+question\b",
+            r"ifc[\s_\-]*data\b",
+            r"\bdo\s+not\s+(use|follow|trust|mention|cite|rely)\b",
+            r"^\s*(system|assistant|user|developer)\s*:",
+        ]
+    ),
+    re.IGNORECASE,
+)
+
+
+def _clean_line(line: str) -> str:
+    chars = []
+    for ch in line:
+        category = unicodedata.category(ch)
+        if category == "Cf":
+            # Zero-width and formatting characters could split keywords apart.
+            continue
+        chars.append(" " if category in ("Cc", "Zl", "Zp") else ch)
+    line = _FENCE_RE.sub(" ", "".join(chars))
+    return _HEADING_RE.sub(" ", line)
+
+
+def sanitize_ifc_text(value: Any, max_chars: int = MAX_TEXT_CHARS) -> str:
+    """
+    Reduce a string taken from an IFC file to a single line of plain data.
+
+    Control characters, line breaks, markdown structure and data-fence markers
+    are removed, and any sentence phrased as an instruction to the model is
+    dropped. Returns "" for empty input and REMOVED_TEXT when every sentence was
+    dropped, or when an instruction only appears once the remaining sentences
+    are joined back together.
+    """
+    if value is None:
+        return ""
+    text = unicodedata.normalize("NFKC", str(value))
+
+    kept: list[str] = []
+    dropped = False
+    for line in text.splitlines():
+        for sentence in _SENTENCE_SPLIT_RE.split(_clean_line(line)):
+            sentence = _WHITESPACE_RE.sub(" ", sentence).strip()
+            if not sentence:
+                continue
+            if _INSTRUCTION_RE.search(sentence):
+                dropped = True
+                continue
+            kept.append(sentence)
+
+    result = " ".join(kept)
+    if len(result) > max_chars:
+        result = result[: max_chars - 3].rstrip() + "..."
+    if _INSTRUCTION_RE.search(result):
+        return REMOVED_TEXT
+    if not result and dropped:
+        return REMOVED_TEXT
+    return result
+
+
+def _sanitize_name(value: Any, default: str) -> str:
+    return sanitize_ifc_text(value, MAX_NAME_CHARS) or default
+
+
+def _format_number(value: Any) -> str:
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return str(value)
+    return sanitize_ifc_text(value, MAX_NAME_CHARS)
+
 
 def _compute_cache_key(ifc_path: str) -> str:
-    """Compute cache key from file path and modification time."""
-    path_obj = Path(ifc_path)
-    mtime = path_obj.stat().st_mtime
-    key_string = f"{ifc_path}:{mtime}"
-    return hashlib.md5(key_string.encode()).hexdigest()
+    """Compute cache key from the file's contents, its name and the summary format."""
+    digest = hashlib.sha256()
+    digest.update(f"v{SUMMARY_FORMAT_VERSION}\0{os.path.basename(ifc_path)}\0".encode())
+    with open(ifc_path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _load_cached_summary(cache_key: str) -> str | None:
-    """Load cached summary if it exists."""
+    """Load cached summary if it exists and was written by this summary format."""
     cache_file = CACHE_DIR / f"{cache_key}.json"
     if cache_file.exists():
         with open(cache_file, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return data.get("summary")
+        if data.get("version") != SUMMARY_FORMAT_VERSION:
+            return None
+        return data.get("summary")
     return None
 
 
@@ -49,7 +158,7 @@ def _save_summary_to_cache(cache_key: str, summary: str) -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_file = CACHE_DIR / f"{cache_key}.json"
     with open(cache_file, "w", encoding="utf-8") as f:
-        json.dump({"summary": summary}, f, indent=2)
+        json.dump({"version": SUMMARY_FORMAT_VERSION, "summary": summary}, f, indent=2)
 
 
 def extract_model_summary(model_path: str) -> dict[str, Any]:
@@ -383,34 +492,39 @@ def format_summary_for_llm(
 
     Returns:
         Formatted string for LLM context
+
+    Every string that originates in the IFC file (including the file name) is
+    passed through sanitize_ifc_text before it is written into the summary.
     """
     lines: list[str] = []
 
     # Header
-    lines.append(f"# IFC Model Summary: {filename}")
+    lines.append(f"# IFC Model Summary: {_sanitize_name(filename, 'unnamed.ifc')}")
     lines.append("")
 
     # Project info
     if summary.get("project"):
         lines.append("## Project Information")
-        lines.append(f"- Name: {summary['project'].get('name', 'N/A')}")
-        if summary["project"].get("description"):
-            lines.append(f"- Description: {summary['project']['description']}")
+        lines.append(f"- Name: {_sanitize_name(summary['project'].get('name'), 'N/A')}")
+        description = sanitize_ifc_text(summary["project"].get("description"))
+        if description:
+            lines.append(f"- Description: {description}")
         lines.append("")
 
     # Building info
     if summary.get("building"):
         lines.append("## Building Information")
-        lines.append(f"- Name: {summary['building'].get('name', 'N/A')}")
-        if summary["building"].get("description"):
-            lines.append(f"- Description: {summary['building']['description']}")
+        lines.append(f"- Name: {_sanitize_name(summary['building'].get('name'), 'N/A')}")
+        description = sanitize_ifc_text(summary["building"].get("description"))
+        if description:
+            lines.append(f"- Description: {description}")
         lines.append("")
 
     # Element counts (always include, most useful for Category 2 questions)
     if summary.get("element_counts"):
         lines.append("## Element Counts")
         for elem_type, count in sorted(summary["element_counts"].items()):
-            lines.append(f"- {elem_type}: {count}")
+            lines.append(f"- {_sanitize_name(elem_type, 'Unknown')}: {_format_number(count)}")
         lines.append("")
 
     # Element types with dimensions
@@ -418,15 +532,18 @@ def format_summary_for_llm(
         lines.append("## Element Types with Dimensions")
         for category, types_list in sorted(summary["element_types"].items()):
             if types_list:
-                lines.append(f"### {category}")
+                lines.append(f"### {_sanitize_name(category, 'Unknown')}")
                 for type_data in types_list:
-                    name = type_data.get("name", "Unnamed")
-                    count = type_data.get("instance_count", 0)
+                    name = _sanitize_name(type_data.get("name"), "Unnamed")
+                    count = _format_number(type_data.get("instance_count", 0))
                     # Build dimension string
                     dim_parts = []
                     for key, value in type_data.items():
                         if key not in ("name", "instance_count"):
-                            dim_parts.append(f"{key}: {value}")
+                            dim_key = _sanitize_name(key, "")
+                            dim_value = sanitize_ifc_text(value, MAX_NAME_CHARS)
+                            if dim_key and dim_key != REMOVED_TEXT and dim_value:
+                                dim_parts.append(f"{dim_key}: {dim_value}")
                     dim_str = ", ".join(dim_parts) if dim_parts else "no dimensions"
                     lines.append(f"- {name} ({count} instances): {dim_str}")
         lines.append("")
@@ -436,18 +553,21 @@ def format_summary_for_llm(
         lines.append("## Building Storeys")
         for storey in summary["storeys"]:
             elev_str = (
-                f" (elevation: {storey['elevation']}m)"
+                f" (elevation: {_format_number(storey['elevation'])}m)"
                 if storey.get("elevation") is not None
                 else ""
             )
-            lines.append(f"- {storey['name']}{elev_str}")
+            lines.append(f"- {_sanitize_name(storey.get('name'), 'Unnamed Storey')}{elev_str}")
         lines.append("")
 
     # Materials
     if summary.get("materials"):
         lines.append("## Materials (by usage count)")
         for material, count in list(summary["materials"].items())[:15]:
-            lines.append(f"- {material}: {count} elements")
+            lines.append(
+                f"- {_sanitize_name(material, 'Unnamed Material')}: "
+                f"{_format_number(count)} elements"
+            )
         if summary.get("materials_note"):
             lines.append(f"Note: {summary['materials_note']}")
         lines.append("")
@@ -460,8 +580,8 @@ def format_summary_for_llm(
         lines.append("## Spaces (Rooms)")
         space_lines: list[str] = []
         for space in summary["spaces"]:
-            name = space.get("name", "Unnamed")
-            long_name = space.get("long_name")
+            name = _sanitize_name(space.get("name"), "Unnamed")
+            long_name = sanitize_ifc_text(space.get("long_name"), MAX_NAME_CHARS)
             space_str = f"- {name}"
             if long_name:
                 space_str += f" ({long_name})"
@@ -483,9 +603,10 @@ def format_summary_for_llm(
         for prop_name, values in summary["properties"].items():
             if isinstance(values, dict):
                 value_str = ", ".join(
-                    f"{v}: {c}" for v, c in list(values.items())[:5]
+                    f"{_sanitize_name(v, 'N/A')}: {_format_number(c)}"
+                    for v, c in list(values.items())[:5]
                 )
-                lines.append(f"- {prop_name}: {value_str}")
+                lines.append(f"- {_sanitize_name(prop_name, 'Unknown')}: {value_str}")
         lines.append("")
 
     result = "\n".join(lines)
