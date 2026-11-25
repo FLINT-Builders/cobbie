@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from src.db.models import IfcBench
-from typing import Optional, Dict, Callable, Literal
+from typing import Optional, Dict, Callable, Literal, Tuple
 from baml_py.baml_py import Collector
 from src.baml.baml_client.types import (
     AnswerEvaluationResult,
@@ -75,5 +75,8 @@ class Context(BaseModel):
     tool_updated: bool = False
     tool_saved: bool = False
     tool_name: Optional[str] = None
+    # Source and (st_dev, st_ino) of the existing created tool selected for debugging or enhancement
+    tool_source: Optional[str] = None
+    tool_file_identity: Optional[Tuple[int, int]] = None
     is_enhancement: bool = False  # Track if current operation is enhancement
     path_taken: Optional[Literal["correct", "wrong", "abstained"]] = None
