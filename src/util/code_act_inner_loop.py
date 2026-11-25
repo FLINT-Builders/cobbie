@@ -8,6 +8,7 @@ from src.config import FUNCTION_BOILERPLATE
 from src.schemas.agent_error import AgentError
 from src.util.baml_retry import call_baml_with_retry
 from src.util.python_executor import execute_python
+from src.util.untrusted_output import fence_execution_output, neutralize_fence_markers
 
 
 def _execute_code_action(
@@ -54,13 +55,13 @@ def _execute_code_action(
         # Update the previous attempt
         attempt = f"""
         --- Iteration {iteration + 1} ---
-        Thoughts: {code_action.thoughts}
+        Thoughts: {neutralize_fence_markers(code_action.thoughts)}
 
         Code:
-        {python_code}
+        {neutralize_fence_markers(python_code)}
 
         Result:
-        {result_code_evaluation}
+        {fence_execution_output(result_code_evaluation)}
 
         """
 

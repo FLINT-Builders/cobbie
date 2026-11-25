@@ -17,6 +17,7 @@ from loguru import logger
 from src.baseline.ifc_summary import get_or_create_summary
 from src.baml.baml_client import b
 from src.baml.baml_client.types import FinalAnswer
+from src.util.untrusted_output import fence_model_summary
 
 
 def baseline_bim_qas(
@@ -107,7 +108,7 @@ def baseline_bim_qas(
                 # Call BAML function with summary context
                 final_answer = b.BaselineQA(
                     user_input=user_input,
-                    model_summary=model_summary,
+                    model_summary=fence_model_summary(model_summary),
                     baml_options={
                         "collector": collector,
                         "client_registry": client_registry,
