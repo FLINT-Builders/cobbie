@@ -25,13 +25,13 @@ function FaultyNewToolAnalysis(
     {{ ground_truth }}
 
     Provided Answer (Wrong):
-    {{ provided_answer }}
+    {{ UntrustedExecutionHistory(provided_answer) }}
 
     Answer Verifier's Justification:
     {{ justification }}
 
     Execution History (thoughts, code, and results):
-    {{ history }}
+    {{ UntrustedExecutionHistory(history) }}
 
     Available Helper Functions:
     {{ existing_helper_functions }}

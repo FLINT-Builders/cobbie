@@ -35,7 +35,7 @@ function Cobbie(
 
   ## PREVIOUS ATTEMPTS
 
-  {{ previous_attempts }}
+  {{ UntrustedExecutionHistory(previous_attempts) }}
   {% endif %}
 
   ## EXPLORATION APPROACH

@@ -28,11 +28,12 @@ function HelperFunctionAssessor(
     QUESTION & ANSWER:
     Original Question: {{ original_question }}
     Ground Truth (Correct Answer): {{ ground_truth_answer }}
-    Cobbie's Final Answer: {{ final_answer }}
+    Cobbie's Final Answer:
+    {{ UntrustedExecutionHistory(final_answer) }}
     Answer Correctness: {{ answer_correctness }}
 
     EXECUTION HISTORY:
-    {{ execution_history }}
+    {{ UntrustedExecutionHistory(execution_history) }}
 
     YOUR ANALYSIS TASK:
 

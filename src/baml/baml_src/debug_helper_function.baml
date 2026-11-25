@@ -69,7 +69,7 @@ function HelperFunctionDebugger(
 
     {% if history_faulty_tool_use %}
     HISTORY OF THE FAULTY TOO USE:
-    {{ history_faulty_tool_use }}
+    {{ UntrustedExecutionHistory(history_faulty_tool_use) }}
 
     {% endif %}
     IFC Model Path: {{ ifc_model_path }}
@@ -81,7 +81,7 @@ function HelperFunctionDebugger(
     {% endif %}
     {% if previous_attempts %}
     PREVIOUS ATTEMPTS:
-    {{ previous_attempts }}
+    {{ UntrustedExecutionHistory(previous_attempts) }}
 
     Learn from previous attempts and iterate to improve the fix.
     {% endif %}
