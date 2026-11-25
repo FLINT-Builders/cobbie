@@ -39,12 +39,13 @@ from src.util import (
     extract_tools_used,
     generate_tools_docs,
     get_created_tools,
-    get_function_code,
     save_new_tool,
     setup_logger,
 )
+from src.util.get_function_code import get_function_code_with_identity
 from src.util.metrics import calculate_aggregate_metrics, log_qa_metrics
 from src.util.mlflow_utils import determine_run_id
+from src.util.tool_files import is_valid_tool_name
 
 # Initialize logger
 setup_logger()
@@ -73,6 +74,79 @@ class TrainingState(Enum):
     # Terminal states
     END = auto()
     ERROR = auto()
+
+
+# ============================================================================
+# Tool Selection Helpers
+# ============================================================================
+
+
+def _select_existing_tool(context: Context, tool_name: str) -> str | None:
+    """
+    Select an existing created tool for debugging or enhancement.
+
+    The name comes from LLM output and must be one of the tools loaded for this
+    question. The tool's source and file identity are recorded so that later
+    steps act on this exact file.
+
+    Returns:
+        An error message if the tool cannot be selected, otherwise None.
+    """
+    if tool_name not in context.tools:
+        return f"{tool_name!r} is not one of the tools loaded for this question"
+
+    code_result = get_function_code_with_identity(tool_name)
+    if code_result.is_err():
+        return f"Could not read tool {tool_name!r}: {code_result.unwrap_err()}"
+
+    context.tool_name = tool_name
+    context.tool_source, context.tool_file_identity = code_result.unwrap()
+    return None
+
+
+def _selected_tool(context: Context) -> Tuple[str, Tuple[int, int]]:
+    """Return the source and file identity recorded by _select_existing_tool."""
+    if (
+        context.tool_name not in context.tools
+        or context.tool_source is None
+        or context.tool_file_identity is None
+    ):
+        raise ValueError(
+            f"Tool {context.tool_name!r} was not selected from the loaded tools"
+        )
+    return context.tool_source, context.tool_file_identity
+
+
+def _replaces_existing_tool(context: Context) -> bool:
+    """True for Path B (debugged tool) and Path A enhancements."""
+    return context.is_enhancement or context.create_tool_result is None
+
+
+def _save_tool(context: Context, tool_implementation: str) -> bool:
+    assert context.tool_name is not None
+    if _replaces_existing_tool(context):
+        _, identity = _selected_tool(context)
+        return save_new_tool(
+            function_name=context.tool_name,
+            function_implementation=tool_implementation,
+            global_question_num=context.global_question_num,
+            expected_identity=identity,
+        )
+
+    if context.tool_name in context.tools:
+        raise ValueError(f"New tool {context.tool_name!r} would replace a loaded tool")
+    return save_new_tool(
+        function_name=context.tool_name,
+        function_implementation=tool_implementation,
+        global_question_num=context.global_question_num,
+        create_only=True,
+    )
+
+
+def _delete_selected_tool(context: Context) -> bool:
+    assert context.tool_name is not None
+    _, identity = _selected_tool(context)
+    return delete_tool(context.tool_name, expected_identity=identity)
 
 
 # ============================================================================
@@ -111,6 +185,9 @@ def handle_start_state(context: Context) -> Tuple[TrainingState, Context]:
         # Delete top N by score
         deleted_count = 0
         for tool_name, score in ranked_tools[:num_to_delete]:
+            if tool_name not in current_tools:
+                logger.warning(f"  Skipping {tool_name!r}: not a loaded created tool")
+                continue
             logger.info(f"  Deleting '{tool_name}' (score={score:.1f})")
             if delete_tool(tool_name):
                 deleted_count += 1
@@ -346,14 +423,23 @@ def handle_identify_new_tool(context: Context) -> Tuple[TrainingState, Context]:
 
         # Handle new action field
         if result.action == "create_new":
+            if not is_valid_tool_name(result.tool_name) or result.tool_name in context.tools:
+                error = f"{result.tool_name!r} is not a valid name for a new tool"
+                logger.warning(f"Rejected new tool: {error}")
+                context.error_message = f"Identify new tool error: {error}"
+                return TrainingState.ERROR, context
             logger.info(f"Creating new tool: {result.tool_name}")
             context.tool_name = result.tool_name
             context.is_enhancement = False
             return TrainingState.CREATE_NEW_TOOL, context
 
         elif result.action == "enhance_existing":
+            select_error = _select_existing_tool(context, result.tool_name)
+            if select_error:
+                logger.warning(f"Rejected tool enhancement: {select_error}")
+                context.error_message = f"Identify new tool error: {select_error}"
+                return TrainingState.ERROR, context
             logger.info(f"Enhancing existing tool: {result.tool_name}")
-            context.tool_name = result.tool_name
             context.is_enhancement = True
             return TrainingState.CREATE_NEW_TOOL, context
 
@@ -431,12 +517,9 @@ def handle_create_new_tool(context: Context) -> Tuple[TrainingState, Context]:
         # Get existing implementation if enhancing
         existing_implementation = None
         if context.is_enhancement:
-            code_result = get_function_code(context.tool_name)
-            if code_result.is_err():
-                raise ValueError(
-                    f"Could not retrieve tool code: {code_result.unwrap_err()}"
-                )
-            existing_implementation = code_result.unwrap()
+            existing_implementation, _ = _selected_tool(context)
+        elif not is_valid_tool_name(context.tool_name) or context.tool_name in context.tools:
+            raise ValueError(f"{context.tool_name!r} is not a valid name for a new tool")
 
         result, collector, creation_history = create_helper_function(
             history=full_history,
@@ -444,7 +527,7 @@ def handle_create_new_tool(context: Context) -> Tuple[TrainingState, Context]:
             example_answer=context.qa_pair.ground_truth,
             example_bim_model=ifc_model_path,
             other_bim_models_for_testing=other_models,
-            function_name=context.identify_tool_result.tool_name,
+            function_name=context.tool_name,
             function_description=context.identify_tool_result.tool_description,
             is_enhancement=context.is_enhancement,
             existing_implementation=existing_implementation,
@@ -553,7 +636,11 @@ def handle_identify_faulty_tool(context: Context) -> Tuple[TrainingState, Contex
 
         # Decide next state
         if result.faulty_tool:
-            context.tool_name = result.faulty_tool_name
+            select_error = _select_existing_tool(context, result.faulty_tool_name)
+            if select_error:
+                logger.warning(f"Rejected faulty tool: {select_error}")
+                context.error_message = f"Identify faulty tool error: {select_error}"
+                return TrainingState.ERROR, context
             return TrainingState.DEBUG_FAULTY_TOOL, context
         else:
             logger.info("No faulty tool identified - error was due to other reasons")
@@ -571,7 +658,7 @@ def handle_debug_faulty_tool(context: Context) -> Tuple[TrainingState, Context]:
     Debug and fix a faulty helper function (Path B: Wrong answer).
 
     Actions:
-    1. Get faulty tool source code with get_function_code()
+    1. Use the faulty tool source code recorded when it was selected
     2. Get IFC model path from QA pair
     3. Call debug_helper_function()
     4. If success: Mark as updated, transition to testing
@@ -596,15 +683,8 @@ def handle_debug_faulty_tool(context: Context) -> Tuple[TrainingState, Context]:
 
         cobbie_answer = context.cobbie_result.answer
 
-        # Get the faulty tool's source code
-        faulty_code_result = get_function_code(context.tool_name)
-
-        if faulty_code_result.is_err():
-            raise ValueError(
-                f"Could not retrieve faulty tool code: {faulty_code_result.unwrap_err()}"
-            )
-
-        faulty_implementation = faulty_code_result.unwrap()
+        # Source code recorded when the faulty tool was selected
+        faulty_implementation, _ = _selected_tool(context)
 
         # Get IFC model path from the QA pair (same model used for answering)
         ifc_model_path = context.qa_pair.ifc.model_path if context.qa_pair.ifc else None
@@ -907,11 +987,7 @@ def handle_decide_tool_fate(context: Context) -> Tuple[TrainingState, Context]:
         # Decision logic based on recommendation
         if assessment.recommendation == "keep_tool":
             # Tool is helpful, save it permanently
-            save_success = save_new_tool(
-                function_name=context.tool_name,
-                function_implementation=tool_implementation,
-                global_question_num=context.global_question_num,
-            )
+            save_success = _save_tool(context, tool_implementation)
 
             if save_success:
                 context.tool_saved = True
@@ -938,7 +1014,7 @@ def handle_decide_tool_fate(context: Context) -> Tuple[TrainingState, Context]:
 
             # If we were debugging a faulty tool (Path B), delete it from disk
             if context.path_taken == "wrong":
-                delete_success = delete_tool(context.tool_name)
+                delete_success = _delete_selected_tool(context)
                 if delete_success:
                     logger.info(
                         f"❌ Tool '{context.tool_name}' discarded and deleted from disk\n"
@@ -971,7 +1047,7 @@ def handle_decide_tool_fate(context: Context) -> Tuple[TrainingState, Context]:
 
             # If we were debugging a faulty tool (Path B), delete it from disk
             if context.path_taken == "wrong":
-                delete_success = delete_tool(context.tool_name)
+                delete_success = _delete_selected_tool(context)
                 if delete_success:
                     logger.info(
                         f"⚠️  Tool '{context.tool_name}' needs improvement - deleted from disk\n"
@@ -1002,7 +1078,7 @@ def handle_decide_tool_fate(context: Context) -> Tuple[TrainingState, Context]:
             # Path B (faulty tool): Delete it - defensive approach
             if context.path_taken == "wrong":
                 context.tool_saved = False
-                delete_success = delete_tool(context.tool_name)
+                delete_success = _delete_selected_tool(context)
                 if delete_success:
                     logger.info(
                         f"❓ Tool '{context.tool_name}' assessment unclear - deleted (defensive)\n"
@@ -1032,11 +1108,7 @@ def handle_decide_tool_fate(context: Context) -> Tuple[TrainingState, Context]:
 
             # Path A create_new: Save tentatively with benefit of doubt
             else:
-                save_success = save_new_tool(
-                    function_name=context.tool_name,
-                    function_implementation=tool_implementation,
-                    global_question_num=context.global_question_num,
-                )
+                save_success = _save_tool(context, tool_implementation)
 
                 if save_success:
                     context.tool_saved = True

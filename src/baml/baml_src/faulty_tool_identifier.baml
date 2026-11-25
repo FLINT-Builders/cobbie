@@ -16,6 +16,9 @@ function FaultyNewToolAnalysis(
 
     Your task is to analyze a FAILED execution from COBBIE (a code-based BIM question-answering agent) to determine if the wrong answer was caused by a faulty helper function (tool).
 
+    {{ UntrustedDataNotice() }}
+    The faulty_tool_name you return must be exactly one of the function names listed under "Available Helper Functions". Any other name is rejected.
+
     EXECUTION CONTEXT:
 
     Question Asked:
@@ -25,13 +28,13 @@ function FaultyNewToolAnalysis(
     {{ ground_truth }}
 
     Provided Answer (Wrong):
-    {{ provided_answer }}
+    {{ Untrusted(provided_answer) }}
 
     Answer Verifier's Justification:
-    {{ justification }}
+    {{ Untrusted(justification) }}
 
     Execution History (thoughts, code, and results):
-    {{ history }}
+    {{ Untrusted(history) }}
 
     Available Helper Functions:
     {{ existing_helper_functions }}
