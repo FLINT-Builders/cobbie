@@ -18,6 +18,7 @@ from src.util.code_act_inner_loop import _code_act_iter, _execute_code_action
 from src.util.extract_raw_prompt import extract_raw_prompt
 from src.util.generate_tools_docs import generate_tools_docs
 from src.util.python_executor import setup_interpreter
+from src.util.untrusted_output import neutralize_fence_markers
 
 
 def _cobbie(
@@ -114,7 +115,7 @@ def _cobbie(
 SCHEMA ERROR: Your response did not match the required format.
 
 Error type: {result.error_type}
-Error: {result.error_message[:500]}
+Error: {neutralize_fence_markers(result.error_message[:500])}
 
 REMINDER: You must return EXACTLY one of these:
 1. CodeAction with fields: thoughts (string), python_code (string)

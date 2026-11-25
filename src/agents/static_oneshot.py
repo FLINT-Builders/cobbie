@@ -22,6 +22,7 @@ from src.util.fallback_code_parser import try_parse_code_action
 from src.util.extract_raw_prompt import extract_raw_prompt
 from src.util.generate_tools_docs import generate_tools_docs
 from src.util.python_executor import execute_python, setup_interpreter
+from src.util.untrusted_output import fence_execution_output, neutralize_fence_markers
 
 
 def static_oneshot(
@@ -186,14 +187,16 @@ def static_oneshot(
                 exec_span.set_status("OK")
 
             # ── Step 3: Answer Synthesis ─────────────────────────────
+            synthesis_code = neutralize_fence_markers(code_result.python_code)
+            fenced_output = fence_execution_output(execution_output)
             with mlflow.start_span(
                 name="answer_synthesis", span_type="LLM"
             ) as synth_span:
                 synth_span.set_inputs(
                     {
                         "user_input": user_input,
-                        "code": code_result.python_code,
-                        "execution_output": execution_output,
+                        "code": synthesis_code,
+                        "execution_output": fenced_output,
                     }
                 )
 
@@ -204,8 +207,8 @@ def static_oneshot(
                         client_registry=client_registry,
                     ).StaticAnswerSynthesizer(
                         user_input=user_input,
-                        code=code_result.python_code,
-                        execution_output=execution_output,
+                        code=synthesis_code,
+                        execution_output=fenced_output,
                     ),
                     context_name="StaticAnswerSynthesizer",
                 )
