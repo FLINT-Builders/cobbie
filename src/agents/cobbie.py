@@ -15,6 +15,7 @@ from loguru import logger
 from src.baml.baml_client.types import CodeAction, FinalAnswer
 from src.schemas.agent_error import AgentError, CobbiResult
 from src.util.code_act_inner_loop import _code_act_iter, _execute_code_action
+from src.util.execution_history import escape_history_field
 from src.util.extract_raw_prompt import extract_raw_prompt
 from src.util.generate_tools_docs import generate_tools_docs
 from src.util.python_executor import setup_interpreter
@@ -113,8 +114,8 @@ def _cobbie(
 --- Iteration {iteration + 1} ---
 SCHEMA ERROR: Your response did not match the required format.
 
-Error type: {result.error_type}
-Error: {result.error_message[:500]}
+Error type: {escape_history_field(result.error_type)}
+Error: {escape_history_field(result.error_message[:500])}
 
 REMINDER: You must return EXACTLY one of these:
 1. CodeAction with fields: thoughts (string), python_code (string)

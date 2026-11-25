@@ -43,6 +43,7 @@ from src.util import (
     save_new_tool,
     setup_logger,
 )
+from src.util.execution_history import function_called_in_history
 from src.util.metrics import calculate_aggregate_metrics, log_qa_metrics
 from src.util.mlflow_utils import determine_run_id
 
@@ -903,6 +904,35 @@ def handle_decide_tool_fate(context: Context) -> Tuple[TrainingState, Context]:
             tool_implementation = context.debug_tool_result.fixed_implementation
         else:
             raise ValueError("No tool implementation available")
+
+        # The assessor reads untrusted run output, so a recommendation that would
+        # write the helper must also be backed by what the executor recorded and
+        # by the stored grade.
+        recommends_save = assessment.recommendation == "keep_tool" or (
+            assessment.recommendation == "unclear"
+            and context.path_taken != "wrong"
+            and not context.is_enhancement
+        )
+        if recommends_save:
+            helper_called = (
+                context.test_cobbie_result is not None
+                and function_called_in_history(
+                    context.test_cobbie_result.history, context.tool_name
+                )
+            )
+            grade_correct = (
+                context.test_verify_result is not None
+                and derive_binary_classification(result=context.test_verify_result)
+                == "correct"
+            )
+            if not (helper_called and grade_correct):
+                context.tool_saved = False
+                logger.warning(
+                    f"Tool '{context.tool_name}' not saved: assessor recommended "
+                    f"{assessment.recommendation}, but executed code called the tool: "
+                    f"{helper_called}, graded answer correct: {grade_correct}"
+                )
+                return TrainingState.END, context
 
         # Decision logic based on recommendation
         if assessment.recommendation == "keep_tool":

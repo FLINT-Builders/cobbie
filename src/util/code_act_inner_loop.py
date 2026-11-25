@@ -7,6 +7,7 @@ from src.baml.baml_client.types import CodeAction, FinalAnswer
 from src.config import FUNCTION_BOILERPLATE
 from src.schemas.agent_error import AgentError
 from src.util.baml_retry import call_baml_with_retry
+from src.util.execution_history import escape_history_field
 from src.util.python_executor import execute_python
 
 
@@ -54,13 +55,13 @@ def _execute_code_action(
         # Update the previous attempt
         attempt = f"""
         --- Iteration {iteration + 1} ---
-        Thoughts: {code_action.thoughts}
+        Thoughts: {escape_history_field(code_action.thoughts)}
 
         Code:
-        {python_code}
+        {escape_history_field(python_code)}
 
         Result:
-        {result_code_evaluation}
+        {escape_history_field(result_code_evaluation)}
 
         """
 
