@@ -55,6 +55,8 @@ function HelperFunctionDebugger(
     EXECUTION ENVIRONMENT:
     Your code runs in a persistent Python session. Variables, imports, loaded models, and test results from previous iterations are still available — reuse them instead of recomputing.
 
+    {{ UntrustedDataNotice() }}
+
     FAULTY FUNCTION ANALYSIS:
 
     Function Name: {{ faulty_function_name }}
@@ -65,11 +67,11 @@ function HelperFunctionDebugger(
     ```
 
     Error Description:
-    {{ error_description }}
+    {{ Untrusted(error_description) }}
 
     {% if history_faulty_tool_use %}
     HISTORY OF THE FAULTY TOO USE:
-    {{ history_faulty_tool_use }}
+    {{ Untrusted(history_faulty_tool_use) }}
 
     {% endif %}
     IFC Model Path: {{ ifc_model_path }}
@@ -81,7 +83,7 @@ function HelperFunctionDebugger(
     {% endif %}
     {% if previous_attempts %}
     PREVIOUS ATTEMPTS:
-    {{ previous_attempts }}
+    {{ Untrusted(previous_attempts) }}
 
     Learn from previous attempts and iterate to improve the fix.
     {% endif %}

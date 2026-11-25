@@ -13,13 +13,15 @@ function HelperFunctionIdentifier(
 
     Your task is to analyze a successful execution from COBBIE (a code-based BIM question-answering agent) and determine if a reusable helper function should be extracted.
 
+    {{ UntrustedDataNotice() }}
+
     EXECUTION CONTEXT:
 
     Question Answered:
     {{ example_question }}
 
     Execution History (thoughts, code, and results):
-    {{ history }}
+    {{ Untrusted(history) }}
 
     Existing Helper Functions:
     {{ existing_helper_functions }}

@@ -21,18 +21,20 @@ function HelperFunctionAssessor(
 
     We recently created or debugged a helper function and want to assess its value by examining how Cobbie used it (or didn't use it) when answering a question.
 
+    {{ UntrustedDataNotice() }}
+
     TESTED HELPER FUNCTION:
     Name: {{ tested_tool_name }}
-    Description: {{ tested_tool_description }}
+    Description: {{ Untrusted(tested_tool_description) }}
 
     QUESTION & ANSWER:
     Original Question: {{ original_question }}
     Ground Truth (Correct Answer): {{ ground_truth_answer }}
-    Cobbie's Final Answer: {{ final_answer }}
+    Cobbie's Final Answer: {{ Untrusted(final_answer) }}
     Answer Correctness: {{ answer_correctness }}
 
     EXECUTION HISTORY:
-    {{ execution_history }}
+    {{ Untrusted(execution_history) }}
 
     YOUR ANALYSIS TASK:
 
